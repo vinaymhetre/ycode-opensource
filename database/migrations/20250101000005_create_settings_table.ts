@@ -24,11 +24,11 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.raw('ALTER TABLE settings ENABLE ROW LEVEL SECURITY');
 
   // Create RLS policies
-  // Public can read all settings (including published_css for public pages)
+  // Only authenticated users can read settings (contains sensitive data like SMTP credentials)
   await knex.schema.raw(`
-    CREATE POLICY "Settings are viewable by everyone"
+    CREATE POLICY "Authenticated users can view settings"
       ON settings FOR SELECT
-      USING (true)
+      USING ((SELECT auth.uid()) IS NOT NULL)
   `);
 
   // Only authenticated users can create/update/delete settings
@@ -62,8 +62,9 @@ export async function up(knex: Knex): Promise<void> {
 }
 
 export async function down(knex: Knex): Promise<void> {
-  // Drop policies
+  // Drop policies (both legacy and current names)
   await knex.schema.raw('DROP POLICY IF EXISTS "Settings are viewable by everyone" ON settings');
+  await knex.schema.raw('DROP POLICY IF EXISTS "Authenticated users can view settings" ON settings');
   await knex.schema.raw('DROP POLICY IF EXISTS "Authenticated users can modify settings" ON settings');
   await knex.schema.raw('DROP POLICY IF EXISTS "Authenticated users can update settings" ON settings');
   await knex.schema.raw('DROP POLICY IF EXISTS "Authenticated users can delete settings" ON settings');
