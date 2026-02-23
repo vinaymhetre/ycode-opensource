@@ -205,6 +205,31 @@ export async function getAssetById(id: string, isPublished: boolean = false): Pr
 }
 
 /**
+ * Get minimal asset info for proxy serving (ignores publish state)
+ * Returns the first matching non-deleted record since both draft/published share the same storage_path
+ */
+export async function getAssetForProxy(id: string): Promise<Pick<Asset, 'id' | 'filename' | 'storage_path' | 'mime_type'> | null> {
+  const client = await getSupabaseAdmin();
+
+  if (!client) {
+    throw new Error('Supabase not configured');
+  }
+
+  const { data, error } = await client
+    .from('assets')
+    .select('id, filename, storage_path, mime_type')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .limit(1);
+
+  if (error || !data?.length) {
+    return null;
+  }
+
+  return data[0];
+}
+
+/**
  * Get multiple assets by IDs in a single query
  * Returns a map of asset ID to asset for quick lookup
  * @param isPublished If true, get published versions; if false, get draft versions (default: false)

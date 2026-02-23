@@ -10,6 +10,7 @@
 
 import type { FieldVariable, CollectionItemWithValues, CollectionField } from '@/types';
 import { isValidUUID } from '@/lib/utils';
+import { getAssetProxyUrl } from '@/lib/asset-utils';
 
 // Re-export client-safe inline variable resolver
 export { resolveInlineVariables } from '@/lib/inline-variables';
@@ -95,9 +96,9 @@ export async function resolveFieldVariableToAssetUrl(
     return null;
   }
 
-  // Get the asset to retrieve its public_url
   const asset = await getAssetById(assetId, isPublished);
-  return asset?.public_url || null;
+  if (!asset) return null;
+  return getAssetProxyUrl(asset) || asset.public_url || null;
 }
 
 /**
@@ -128,7 +129,8 @@ export async function resolveImageUrl(
     }
 
     const asset = await getAssetById(image, isPublished);
-    return asset?.public_url || null;
+    if (!asset) return null;
+    return getAssetProxyUrl(asset) || asset.public_url || null;
   }
 
   // If it's a FieldVariable, resolve it

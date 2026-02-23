@@ -44,8 +44,18 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Apply to public pages ONLY (exclude /ycode/*, /_next/*)
-        source: '/:path((?!ycode|_next).*)*',
+        // Asset proxy: immutable caching (content-addressed by hash)
+        source: '/a/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        // Apply to public pages ONLY (exclude /ycode/*, /_next/*, /a/*)
+        source: '/:path((?!ycode|_next|a/).*)*',
         headers: [
           {
             key: 'Cache-Control',

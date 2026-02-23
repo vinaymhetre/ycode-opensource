@@ -13,6 +13,7 @@ import type { CollectionItemWithValues } from '@/types';
 import { resolveInlineVariables, resolveImageUrl } from '@/lib/resolve-cms-variables';
 import { getSettingsByKeys } from '@/lib/repositories/settingsRepository';
 import { getAssetById } from '@/lib/repositories/assetRepository';
+import { getAssetProxyUrl } from '@/lib/asset-utils';
 
 /**
  * Global page render settings fetched once per page render
@@ -75,7 +76,9 @@ export const fetchGlobalPageSettings = cache(async (): Promise<GlobalPageSetting
   if (settings.favicon_asset_id) {
     try {
       const asset = await getAssetById(settings.favicon_asset_id, true);
-      faviconUrl = asset?.public_url || null;
+      if (asset) {
+        faviconUrl = getAssetProxyUrl(asset) || asset.public_url || null;
+      }
     } catch {
       // Ignore errors fetching favicon
     }
@@ -84,7 +87,9 @@ export const fetchGlobalPageSettings = cache(async (): Promise<GlobalPageSetting
   if (settings.web_clip_asset_id) {
     try {
       const asset = await getAssetById(settings.web_clip_asset_id, true);
-      webClipUrl = asset?.public_url || null;
+      if (asset) {
+        webClipUrl = getAssetProxyUrl(asset) || asset.public_url || null;
+      }
     } catch {
       // Ignore errors fetching web clip
     }

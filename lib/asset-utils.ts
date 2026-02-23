@@ -10,6 +10,8 @@ import {
   DEFAULT_ASSETS,
   getAcceptString,
 } from './asset-constants';
+import { uuidToBase62, mimeToExtension } from '@/lib/convertion-utils';
+import { sanitizeSlug } from '@/lib/page-utils';
 
 // Re-export constants for backward compatibility
 export { ASSET_CATEGORIES, ALLOWED_MIME_TYPES, DEFAULT_ASSETS, getAcceptString };
@@ -221,6 +223,44 @@ export function validateImageFile(
 }
 
 /**
+ * Generate SEO-friendly proxy URL for an asset
+ * Format: /a/{base62-id}/{slugified-name}.{ext}
+ * Returns null for SVG/inline assets (no storage_path)
+ */
+export function getAssetProxyUrl(
+  asset: { id: string; filename: string; mime_type: string; storage_path?: string | null }
+): string | null {
+  if (!asset.storage_path) return null;
+
+  const hash = uuidToBase62(asset.id);
+  const baseName = asset.filename.replace(/\.[^/.]+$/, '');
+  const slug = sanitizeSlug(baseName) || 'file';
+  const ext = mimeToExtension(asset.mime_type);
+
+  return `/a/${hash}/${slug}.${ext}`;
+}
+
+/**
+ * Check if a URL is an asset proxy URL (starts with /a/)
+ */
+function isProxyUrl(url: string): boolean {
+  return url.startsWith('/a/');
+}
+
+/**
+ * Check if a URL supports image transformation params
+ */
+function isTransformableUrl(url: string): boolean {
+  if (isProxyUrl(url)) return true;
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname.includes('supabase') || urlObj.pathname.includes('/storage/v1/object/public/');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Generate optimized thumbnail URL for faster loading
  * Adds image transformation parameters for Supabase Storage URLs to reduce file size
  * @param url - Original image URL
@@ -239,18 +279,20 @@ export function getOptimizedImageUrl(
   height: number = 200,
   quality: number = 80
 ): string {
+  if (!isTransformableUrl(url)) return url;
+
   try {
-    const urlObj = new URL(url);
-    // Check if it's a Supabase Storage URL
-    if (urlObj.hostname.includes('supabase') || urlObj.pathname.includes('/storage/v1/object/public/')) {
-      // Add image transformation parameters for smaller, optimized thumbnails
-      urlObj.searchParams.set('width', width.toString());
-      urlObj.searchParams.set('height', height.toString());
-      urlObj.searchParams.set('resize', 'cover');
-      urlObj.searchParams.set('quality', quality.toString());
-      return urlObj.toString();
+    if (isProxyUrl(url)) {
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}width=${width}&height=${height}&quality=${quality}`;
     }
-    return url;
+
+    const urlObj = new URL(url);
+    urlObj.searchParams.set('width', width.toString());
+    urlObj.searchParams.set('height', height.toString());
+    urlObj.searchParams.set('resize', 'cover');
+    urlObj.searchParams.set('quality', quality.toString());
+    return urlObj.toString();
   } catch {
     return url;
   }
@@ -273,17 +315,16 @@ export function generateImageSrcset(
   sizes: number[] = [400, 800, 1200, 1600],
   quality: number = 85
 ): string {
-  try {
-    const urlObj = new URL(url);
-    // Check if it's a Supabase Storage URL
-    const isSupabaseUrl = urlObj.hostname.includes('supabase') || urlObj.pathname.includes('/storage/v1/object/public/');
+  if (!isTransformableUrl(url)) return '';
 
-    if (!isSupabaseUrl) {
-      // For non-Supabase URLs, return empty srcset (browser will use src)
-      return '';
+  try {
+    if (isProxyUrl(url)) {
+      const baseUrl = url.split('?')[0];
+      return sizes
+        .map((width) => `${baseUrl}?width=${width}&quality=${quality} ${width}w`)
+        .join(', ');
     }
 
-    // Generate srcset entries for each size
     const srcsetEntries = sizes.map((width) => {
       const sizeUrl = new URL(url);
       sizeUrl.searchParams.set('width', width.toString());

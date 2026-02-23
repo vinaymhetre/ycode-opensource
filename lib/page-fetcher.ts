@@ -5,7 +5,7 @@ import { getFieldsByCollectionId } from '@/lib/repositories/collectionFieldRepos
 import type { Page, PageFolder, PageLayers, Component, CollectionItemWithValues, CollectionField, Layer, CollectionPaginationMeta, Translation, Locale } from '@/types';
 import { getCollectionVariable, resolveFieldValue, evaluateVisibility } from '@/lib/layer-utils';
 import { isFieldVariable, isAssetVariable, createDynamicTextVariable, createDynamicRichTextVariable, createAssetVariable, getDynamicTextContent, getVariableStringValue, getAssetId, resolveDesignStyles } from '@/lib/variable-utils';
-import { generateImageSrcset, getImageSizes, getOptimizedImageUrl, DEFAULT_ASSETS } from '@/lib/asset-utils';
+import { generateImageSrcset, getImageSizes, getOptimizedImageUrl, getAssetProxyUrl, DEFAULT_ASSETS } from '@/lib/asset-utils';
 import { resolveComponents } from '@/lib/resolve-components';
 import { extractInlineNodesFromRichText, isTiptapDoc, hasBlockElementsWithResolver } from '@/lib/tiptap-utils';
 import { DEFAULT_TEXT_STYLES } from '@/lib/text-format-utils';
@@ -2116,6 +2116,12 @@ export async function renderCollectionItemsToHtml(
       if (missingAssetIds.length > 0) {
         const { getAssetsByIds } = await import('@/lib/repositories/assetRepository');
         const additionalAssets = await getAssetsByIds(missingAssetIds, isPublished);
+        for (const asset of Object.values(additionalAssets)) {
+          const proxyUrl = getAssetProxyUrl(asset);
+          if (proxyUrl) {
+            asset.public_url = proxyUrl;
+          }
+        }
         assetMap = { ...assetMap, ...additionalAssets };
       }
 
@@ -2337,6 +2343,14 @@ async function resolveAllAssets(layers: Layer[], isPublished: boolean = true): P
 
   // Step 2: Fetch all assets in a single query
   const assetMap = await getAssetsByIds(Array.from(assetIds), isPublished);
+
+  // Step 2.5: Override public_url with SEO-friendly proxy URLs where available
+  for (const asset of Object.values(assetMap)) {
+    const proxyUrl = getAssetProxyUrl(asset);
+    if (proxyUrl) {
+      asset.public_url = proxyUrl;
+    }
+  }
 
   // Step 3: Resolve layer URLs using the fetched asset map
   const resolveLayer = (layer: Layer): Layer => {
